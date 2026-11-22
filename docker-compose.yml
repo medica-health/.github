@@ -14,6 +14,8 @@ x-app-env: &app-env
   MAIL_FROM: ${MAIL_FROM:-MediCare <onboarding@resend.dev>}
   MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
   APP_BASE_URL: http://localhost:3000
+  # Shared secret for spring-api's /api/internal/** (the receptionist sends it as X-Api-Key).
+  API_KEY: ${API_KEY:-local-dev-api-key}
 
 services:
   mongo:
@@ -105,6 +107,11 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/cdac_db
       CORS_ORIGINS: http://localhost:3000
       REDIS_URL: redis://redis:6379/0
+      # SMS to phone-registered patients. Without SID/token, SMS is only logged.
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_SMS_FROM: ${TWILIO_SMS_FROM:-}
+      TWILIO_MESSAGING_SERVICE_SID: ${TWILIO_MESSAGING_SERVICE_SID:-}
     ports:
       - "5000:5000"
     depends_on:
@@ -115,6 +122,41 @@ services:
       postgres:
         condition: service_healthy
       # express-api's migrations reference auth.users, created by spring-api's Flyway
+      spring-api:
+        condition: service_healthy
+
+  # Twilio phone receptionist. Locally it uses the main DB user (read-only by convention); the
+  # receptionist_ro role (NOLOGIN, express migration 004) only gets LOGIN on AWS.
+  # Startup fails fast unless TWILIO_AUTH_TOKEN and ANTHROPIC_API_KEY are set in the root .env.
+  receptionist:
+    build: ./receptionist
+    restart: unless-stopped
+    environment:
+      PORT: 7000
+      APP_ENV: production
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:7000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/cdac_db
+      REDIS_URL: redis://redis:6379/0
+      EXPRESS_API_URL: http://express-api:5000
+      SPRING_API_URL: http://spring-api:8080
+      API_KEY: ${API_KEY:-local-dev-api-key}
+      JWT_SECRET: ${JWT_SECRET:-local-dev-only-secret-change-me-0123456789}
+      JWT_ISSUER: cdac-auth
+      JWT_AUDIENCE: cdac-api
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-claude-opus-5-5}
+    ports:
+      - "7000:7000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # express-api has no healthcheck; started is the strongest condition available
+      express-api:
+        condition: service_started
       spring-api:
         condition: service_healthy
 
