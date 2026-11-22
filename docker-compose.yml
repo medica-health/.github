@@ -127,8 +127,11 @@ services:
 
   # Twilio phone receptionist. Locally it uses the main DB user (read-only by convention); the
   # receptionist_ro role (NOLOGIN, express migration 004) only gets LOGIN on AWS.
-  # Startup fails fast unless TWILIO_AUTH_TOKEN and ANTHROPIC_API_KEY are set in the root .env.
+  # Startup fails fast unless TWILIO_AUTH_TOKEN and ANTHROPIC_API_KEY are set in the root .env,
+  # so it is behind the `voice` profile and not started by a plain `up`. To run it:
+  #   docker compose -f .github/docker-compose.yml --project-directory . --profile voice up --build
   receptionist:
+    profiles: [voice]
     build: ./receptionist
     restart: unless-stopped
     environment:
