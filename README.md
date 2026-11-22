@@ -248,6 +248,8 @@ Run the checks for the repo you changed before you push:
 
 Then run the full stack with Docker Compose and try your change end to end.
 
+The same checks run automatically in **GitHub Actions** (`.github/workflows/ci.yml` in each repo) on every pull request and every push to `main`. A PR can't be merged until they pass.
+
 ### 6. Commit
 
 Write commit messages in the imperative mood, with a short summary line (about 50 characters) and an optional body explaining *why*:
@@ -287,7 +289,7 @@ On GitHub, open a PR from your branch into `main`, or use the CLI:
 gh pr create --base main --fill
 ```
 
-In the PR description, include:
+The description is pre-filled from the organization's [PR template](https://github.com/medica-health/.github/blob/main/PULL_REQUEST_TEMPLATE.md). Fill in each section, which covers:
 
 - **What** changed and **why**
 - **How to test** it (commands, URLs, sample requests)
@@ -305,6 +307,15 @@ Open it as a **draft** if it isn't ready for review yet.
 - **Reviewers** check that the code works, follows the existing patterns, keeps the two APIs consistent, and doesn't include secrets.
 
 ### 11. Merge
+
+`main` is protected in every repo. A PR can only be merged when:
+
+- it has at least **one approval** (new commits dismiss earlier approvals),
+- all **CI checks pass**,
+- the branch is **up to date** with `main`, and
+- every review conversation is **resolved**.
+
+Direct pushes, force-pushes and deleting `main` are blocked.
 
 Once the PR is approved and up to date with `main`:
 
