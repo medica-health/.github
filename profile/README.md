@@ -151,6 +151,181 @@ Secrets Manager → External Secrets Operator → Kubernetes Secrets → app pod
 
 Both APIs are served from one shared ALB, Spring on port 8080 and Express on port 5000. The defaults (region `ap-south-1`, environment `dev`) cost roughly **$250+/month**, so run `terraform destroy` when you're not using it. See the `infra` and `remote-backend` READMEs for secret rotation, DocumentDB TLS, costs and the production checklist.
 
+## Developer setup
+
+### Tools
+
+| Tool | Needed for |
+|---|---|
+| Git and a GitHub account with access to `medica-health` | everything |
+| Docker Desktop (Compose v2) | running the full stack locally |
+| [Bun](https://bun.sh) 1.3+ | `client-side`, `express-api` |
+| JDK 21 | `spring-api` (Maven comes with the `mvnw` wrapper) |
+| Terraform ≥ 1.10, AWS CLI v2, kubectl, Helm | only for `infra`, `remote-backend`, `helm` |
+
+Optional: [GitHub CLI](https://cli.github.com) (`gh`) makes it easier to open PRs from the terminal.
+
+### Set up the workspace (first time)
+
+Clone every repo into **one** folder. The local Docker Compose file expects them side by side:
+
+```bash
+mkdir cdac-project && cd cdac-project
+
+for repo in .github client-side spring-api express-api helm infra remote-backend; do
+  git clone https://github.com/medica-health/$repo.git
+done
+```
+
+Check that your Git identity is set, so commits are credited to you:
+
+```bash
+git config --global user.name  "Your Name"
+git config --global user.email "you@example.com"
+```
+
+On Windows, keep line endings consistent with the Linux containers:
+
+```bash
+git config --global core.autocrlf input
+```
+
+Then follow [Quick start (local)](#quick-start-local) to run the stack.
+
+## Contributing
+
+Every change goes through a pull request. Nobody pushes directly to `main`.
+
+### 1. Pick up the work
+
+- Find or create a GitHub **issue** in the repo you'll change, describing what you'll do.
+- Assign it to yourself so others know it's taken.
+- If one change touches several repos (e.g. a new endpoint in both APIs plus the front end), open one issue per repo and link them.
+
+### 2. Get the latest `main`
+
+```bash
+cd spring-api            # the repo you're working in
+git checkout main
+git pull origin main
+```
+
+### 3. Create a branch
+
+Branch from the updated `main`. Use a prefix and a short description, plus the issue number:
+
+```bash
+git checkout -b feature/12-user-login
+```
+
+| Prefix | Use for |
+|---|---|
+| `feature/` | new functionality |
+| `fix/` | bug fixes |
+| `chore/` | dependencies, config, tooling |
+| `docs/` | documentation only |
+| `refactor/` | code changes with no behaviour change |
+
+### 4. Make your changes
+
+- Keep a branch to one topic. Smaller PRs get reviewed faster.
+- **Keep the two APIs in step.** `spring-api` and `express-api` expose the same endpoints and return the same `{ success, message, data, timestamp }` envelope. If you add or change an endpoint in one, do the same in the other (or open an issue for it).
+- **Environment variables:** if you add or rename one, update `.env.example`, `.github/docker-compose.yml` and, for secrets, the Helm chart and Terraform (`infra/secrets.tf`) too.
+- **Never commit secrets:** no `.env` files, `*.tfvars`, `backend.hcl` or Terraform state. These are already in `.gitignore`; don't force-add them.
+- `client-side` uses Next.js 16, which has breaking changes from older versions. Check the docs bundled in `node_modules/next/dist/docs/` before relying on older patterns.
+
+### 5. Check your work locally
+
+Run the checks for the repo you changed before you push:
+
+| Repo | Commands |
+|---|---|
+| `client-side` | `bun run lint` and `bun run build` |
+| `express-api` | `bun run typecheck` |
+| `spring-api` | `./mvnw test` |
+| `helm` | `helm lint cdac-apis` |
+| `infra` / `remote-backend` | `terraform fmt -check` and `terraform validate` |
+
+Then run the full stack with Docker Compose and try your change end to end.
+
+### 6. Commit
+
+Write commit messages in the imperative mood, with a short summary line (about 50 characters) and an optional body explaining *why*:
+
+```bash
+git add <files>
+git commit -m "Add login endpoint to Spring API" -m "Refs #12"
+```
+
+Prefer several small, focused commits over one large one.
+
+### 7. Stay up to date with `main`
+
+If `main` has moved on while you were working, rebase your branch onto it and fix any conflicts:
+
+```bash
+git fetch origin
+git rebase origin/main
+# fix conflicts, then: git add <files> && git rebase --continue
+```
+
+### 8. Push your branch
+
+```bash
+git push -u origin feature/12-user-login
+# after a rebase on a branch you've already pushed:
+git push --force-with-lease
+```
+
+Only force-push your **own** feature branch, never `main`.
+
+### 9. Open a pull request
+
+On GitHub, open a PR from your branch into `main`, or use the CLI:
+
+```bash
+gh pr create --base main --fill
+```
+
+In the PR description, include:
+
+- **What** changed and **why**
+- **How to test** it (commands, URLs, sample requests)
+- `Closes #12` to link and auto-close the issue
+- Screenshots for UI changes
+- Links to related PRs in other repos, if the change spans several
+
+Open it as a **draft** if it isn't ready for review yet.
+
+### 10. Review
+
+- Request at least **one reviewer** from the team.
+- Respond to every comment: push a fix or reply explaining your choice.
+- Push follow-up commits to the same branch; the PR updates automatically.
+- **Reviewers** check that the code works, follows the existing patterns, keeps the two APIs consistent, and doesn't include secrets.
+
+### 11. Merge
+
+Once the PR is approved and up to date with `main`:
+
+- Use **Squash and merge**, so `main` gets one clean commit per PR.
+- Delete the branch after merging.
+- Clean up locally:
+
+```bash
+git checkout main
+git pull origin main
+git branch -D feature/12-user-login   # -D because squash merges aren't seen as merged by Git
+```
+
+### Changes to infrastructure
+
+For `infra`, `remote-backend` and `helm`:
+
+- Paste the relevant `terraform plan` output (or the `helm template` / `helm diff` output) into the PR, with any secret values removed.
+- Only run `terraform apply` **after** the PR is approved and merged, from an up-to-date `main`.
+- Call out anything that destroys or replaces resources, or that changes costs.
+
 ## Tech stack
 
 | Layer | Technology |
