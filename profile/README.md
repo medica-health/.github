@@ -241,7 +241,7 @@ Run the checks for the repo you changed before you push:
 | Repo | Commands |
 |---|---|
 | `client-side` | `bun run lint` and `bun run build` |
-| `express-api` | `bun run typecheck` |
+| `express-api` | `bun run lint` and `bun run typecheck` |
 | `spring-api` | `./mvnw test` |
 | `helm` | `helm lint cdac-apis` |
 | `infra` / `remote-backend` | `terraform fmt -check` and `terraform validate` |
