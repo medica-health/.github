@@ -14,7 +14,7 @@ x-app-env: &app-env
   MAIL_FROM: ${MAIL_FROM:-MediCare <onboarding@resend.dev>}
   MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
   APP_BASE_URL: http://localhost:3000
-  # Shared secret for spring-api's /api/internal/** (the receptionist sends it as X-Api-Key).
+  # Shared secret for spring-api's /api/internal/**.
   API_KEY: ${API_KEY:-local-dev-api-key}
 
 services:
@@ -125,8 +125,10 @@ services:
       spring-api:
         condition: service_healthy
 
-  # Twilio phone receptionist. Locally it uses the main DB user (read-only by convention); the
-  # receptionist_ro role (NOLOGIN, express migration 004) only gets LOGIN on AWS.
+  # Twilio phone receptionist. It doesn't call either API: it reads and writes the shared
+  # Postgres and Redis directly (the schemas come from spring-api's and express-api's
+  # migrations). Locally it uses the main DB user; the receptionist_app role (NOLOGIN, express
+  # migration 005) only gets LOGIN on AWS.
   # Startup fails fast unless TWILIO_AUTH_TOKEN and ANTHROPIC_API_KEY are set in the root .env,
   # so it is behind the `voice` profile and not started by a plain `up`. To run it:
   #   docker compose -f .github/docker-compose.yml --project-directory . --profile voice up --build
@@ -140,14 +142,14 @@ services:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:7000}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/cdac_db
       REDIS_URL: redis://redis:6379/0
-      EXPRESS_API_URL: http://express-api:5000
-      SPRING_API_URL: http://spring-api:8080
-      API_KEY: ${API_KEY:-local-dev-api-key}
-      JWT_SECRET: ${JWT_SECRET:-local-dev-only-secret-change-me-0123456789}
-      JWT_ISSUER: cdac-auth
-      JWT_AUDIENCE: cdac-api
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_SMS_FROM: ${TWILIO_SMS_FROM:-}
+      TWILIO_MESSAGING_SERVICE_SID: ${TWILIO_MESSAGING_SERVICE_SID:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-MediCare <onboarding@resend.dev>}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      APP_BASE_URL: http://localhost:3000
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-claude-opus-5-5}
     ports:
@@ -156,11 +158,6 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      # express-api has no healthcheck; started is the strongest condition available
-      express-api:
-        condition: service_started
-      spring-api:
         condition: service_healthy
 
   client:
