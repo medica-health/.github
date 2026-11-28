@@ -1,54 +1,59 @@
-# CDAC
+# MediCare · medica-health
 
-A full-stack web project: a Next.js front end backed by two REST APIs, one in **Spring Boot** and one in **Express**. Both APIs use **PostgreSQL** and **MongoDB**. Everything runs locally with Docker Compose and deploys to **AWS EKS** with Terraform and Helm.
+**MediCare** is an online doctor appointment system. Patients find doctors near them, book, cancel and reschedule appointments, and keep their prescriptions and medical records in one place. Patients can also book over the phone through an AI voice receptionist that speaks English and Hindi.
+
+![Repositories](https://img.shields.io/badge/repositories-5-blue)
+![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.2-6DB33F?logo=springboot&logoColor=white)
+![Express](https://img.shields.io/badge/Express-5-000000?logo=express)
+![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 
 ```
-                 ┌──────────────────────┐
-                 │  client-side :3000   │  Next.js 16 · React 19 · Tailwind v4
-                 └─────┬──────────┬─────┘
-                       │          │
-        ┌──────────────▼───┐  ┌───▼──────────────┐
-        │ spring-api :8080 │  │ express-api :5000│
-        │ Spring Boot 4.2  │  │ Express 5 · Bun  │
-        │ Java 21          │  │ TypeScript       │
-        └───┬──────────┬───┘  └───┬──────────┬───┘
-            │          │          │          │
-     ┌──────▼──────────▼──┐  ┌────▼──────────▼────┐
-     │ PostgreSQL 16      │  │ MongoDB 7          │
-     │ (RDS on AWS)       │  │ (DocumentDB on AWS)│
-     └────────────────────┘  └────────────────────┘
+                       ┌──────────────────────┐        ┌───────────────────────┐
+                       │  client-side :3000   │        │  receptionist :7000   │
+                       │  Next.js · React     │        │  FastAPI · LangGraph  │
+                       └─────┬──────────┬─────┘        │  Twilio voice calls   │
+                             │          │              └──────────┬────────────┘
+              ┌──────────────▼───┐  ┌───▼──────────────┐          │
+              │ spring-api :8080 │  │ express-api :5000│          │
+              │ auth · JWTs      │  │ doctors · slots  │          │
+              │ Spring Boot      │  │ appointments     │          │
+              └────────┬─────────┘  └───┬──────────┬───┘          │
+                       │                │          │              │
+               ┌───────▼────────────────▼──┐  ┌────▼────────┐     │
+               │ PostgreSQL 16 + PostGIS   │  │ MongoDB 7   │     │
+               │ Redis 7 (holds, cache)    │◄─┼─────────────┼─────┘
+               └───────────────────────────┘  └─────────────┘
 ```
 
 ## Repositories
 
-The project is split into separate repositories, checked out side by side in one workspace folder:
+The organisation has **5 public repositories**:
 
-| Repo | Description |
-|---|---|
-| `client-side` | Next.js front end |
-| `spring-api` | Spring Boot REST API (JPA + Spring Data MongoDB, Actuator) |
-| `express-api` | Express REST API (`pg` + Mongoose), run by Bun |
-| `helm` | Helm chart `cdac-apis` that deploys both APIs to Kubernetes |
-| `infra` | Terraform for the AWS environment (VPC, EKS, RDS, DocumentDB, ECR, Secrets Manager) |
-| `remote-backend` | Terraform for the S3 bucket that stores the `infra` state |
-| `.github` | This repo: project overview and the full-stack `docker-compose.yml` |
+| Repository | Language | What it does |
+|---|---|---|
+| [`client-side`](https://github.com/medica-health/client-side) | TypeScript | Next.js web app for patients, doctors and admins |
+| [`spring-api`](https://github.com/medica-health/spring-api) | Java | Accounts and authentication. Owns the `auth` schema and issues the JWTs |
+| [`express-api`](https://github.com/medica-health/express-api) | TypeScript | Domain API: doctor search ("near me" and by city), scheduling, appointments, prescriptions, medical records, reviews, admin, email and SMS notifications |
+| [`receptionist`](https://github.com/medica-health/receptionist) | Python | Phone receptionist: answers calls, verifies the caller and books or changes appointments (FastAPI, LangGraph + Claude, Twilio ConversationRelay) |
+| [`.github`](https://github.com/medica-health/.github) | — | This profile, the PR template and the full-stack `docker-compose.yml` |
 
+## Quick start
+
+**Prerequisites:** Git and Docker with Compose v2.
+
+Clone the repositories side by side into one folder, which the Compose file expects:
+
+```bash
+mkdir medicare && cd medicare
+
+for repo in .github client-side spring-api express-api receptionist; do
+  git clone https://github.com/medica-health/$repo.git
+done
 ```
-cdac project/
-├── .github/          # this repo
-├── client-side/
-├── spring-api/
-├── express-api/
-├── helm/
-├── infra/
-└── remote-backend/
-```
 
-## Quick start (local)
-
-**Prerequisites:** Docker with Compose v2.
-
-From the workspace root (the folder containing all the repos):
+Then start the whole stack from that folder:
 
 ```bash
 docker compose -f .github/docker-compose.yml --project-directory . up --build
@@ -56,163 +61,67 @@ docker compose -f .github/docker-compose.yml --project-directory . up --build
 
 | Service | URL |
 |---|---|
-| Front end | http://localhost:3000 |
+| Web app | http://localhost:3000 |
 | Spring API | http://localhost:8080/api/health |
 | Express API | http://localhost:5000/api/health |
-| PostgreSQL | `localhost:5432`, database `cdac_db` (user/password `postgres`) |
-| MongoDB | `localhost:27017`, database `cdac_db` (user `root`, password `example`) |
+| Receptionist | http://localhost:7000/api/health |
+| PostgreSQL + PostGIS | `localhost:5432` |
+| MongoDB | `localhost:27017` |
+| Redis | `localhost:6379` |
 
-You can override the database credentials with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `MONGO_USER` and `MONGO_PASSWORD` in your shell or in a `.env` file. Stop the stack with `down`; add `-v` to also delete the database volumes.
+Stop it with `down`; add `-v` to also delete the database volumes.
 
-### Running a single service
+### Running one service on its own
 
-Start only the databases, then run one app on your machine:
+Start only the databases, then run the app you're working on:
 
 ```bash
-docker compose -f .github/docker-compose.yml --project-directory . up -d postgres mongo
+docker compose -f .github/docker-compose.yml --project-directory . up -d postgres mongo redis
 ```
 
-| Service | Prerequisites | Commands |
+| Repository | Needs | Commands |
 |---|---|---|
-| `client-side` | Bun | `bun install` → `bun dev` |
-| `express-api` | Bun | `cp .env.example .env` → `bun install` → `bun run dev` |
-| `spring-api` | JDK 21 | `./mvnw spring-boot:run` (Windows: `mvnw.cmd`) · tests: `./mvnw test` |
+| `client-side` | [Bun](https://bun.sh) 1.3+ | `bun install` → `bun dev` |
+| `express-api` | Bun 1.3+ | `cp .env.example .env` → `bun install` → `bun run dev` |
+| `spring-api` | JDK 21 | `./mvnw spring-boot:run` (Windows: `mvnw.cmd`) |
+| `receptionist` | Python 3.14, [uv](https://docs.astral.sh/uv/) | `cp .env.example .env` → `uv sync` → `uv run receptionist serve` |
 
-The defaults in each `.env.example` and in `application.yml` point at the local databases. When the databases run in Compose with root credentials, add them to `MONGO_URI`, e.g. `mongodb://root:example@localhost:27017/cdac_db?authSource=admin`.
+Each repository's README covers its own configuration.
 
-## API
+## API conventions
 
-Both APIs expose the same endpoints and response format:
-
-| Method | Path | Response |
-|---|---|---|
-| `GET` | `/` | `{ "message": "Running" }` |
-| `GET` | `/api/health` | App environment and the status (`up` / `down`) of each database |
+Every service answers `GET /` with `{ "message": "Running" }` and `GET /api/health` with the status of its dependencies. Responses share one envelope:
 
 ```json
 {
   "success": true,
   "message": "API is running successfully",
-  "data": {
-    "environment": "development",
-    "databases": { "postgres": "up", "mongodb": "up" }
-  },
+  "data": { "...": "..." },
   "timestamp": "2026-11-22T10:00:00.000Z"
 }
 ```
 
-Errors use the same envelope with `"success": false`. Spring also exposes `/actuator/health` (with liveness and readiness groups on Kubernetes).
-
-## Configuration
-
-All services are configured through environment variables. The names are the same locally, in Compose and in the Kubernetes secrets.
-
-| Variable | Used by | Description |
-|---|---|---|
-| `PORT` | both APIs | HTTP port (`8080` Spring, `5000` Express) |
-| `APP_ENV` | spring-api | Active Spring profile (`development` / `production`) |
-| `NODE_ENV` | express-api | Node environment |
-| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | spring-api | PostgreSQL JDBC connection |
-| `DATABASE_URL` | express-api | PostgreSQL connection URL (`postgres://…`) |
-| `MONGO_URI` | both APIs | MongoDB connection string |
-| `CORS_ORIGINS` | both APIs | Allowed front-end origins, comma separated |
-| `JWT_SECRET`, `API_KEY` | both APIs | Application secrets |
-| `NEXT_PUBLIC_SPRING_API_URL`, `NEXT_PUBLIC_EXPRESS_API_URL` | client-side | API URLs for the browser, **set at build time** |
-| `SPRING_API_URL`, `EXPRESS_API_URL` | client-side | API URLs for server-side code, set at runtime |
-
-## Deploying to AWS
-
-```
-Internet → ALB → EKS (private subnets) → RDS PostgreSQL + DocumentDB (isolated subnets)
-Secrets Manager → External Secrets Operator → Kubernetes Secrets → app pods
-```
-
-**Prerequisites:** Terraform ≥ 1.10, AWS CLI v2, kubectl, Helm, and AWS credentials.
-
-1. **State bucket** (once per AWS account):
-   ```bash
-   cd remote-backend && terraform init && terraform apply
-   ```
-2. **Infrastructure** (about 20–25 minutes):
-   ```bash
-   cd ../infra
-   cp terraform.tfvars.example terraform.tfvars   # adjust as needed
-   terraform init -backend-config=backend.hcl
-   terraform plan -out tfplan && terraform apply tfplan
-   $(terraform output -raw configure_kubectl)
-   ```
-3. **Images:** build and push each service to the ECR repos listed by `terraform output ecr_repository_urls`.
-4. **Apps:** install the Helm chart using the command Terraform prints:
-   ```bash
-   $(terraform output -raw helm_install_command) \
-     --set apps.spring-api.image.tag=v1 --set apps.express-api.image.tag=v1
-   ```
-5. **Check:** `kubectl get externalsecrets,pods,ingress -n cdac`
-
-Both APIs are served from one shared ALB, Spring on port 8080 and Express on port 5000. The defaults (region `ap-south-1`, environment `dev`) cost roughly **$250+/month**, so run `terraform destroy` when you're not using it. See the `infra` and `remote-backend` READMEs for secret rotation, DocumentDB TLS, costs and the production checklist.
-
-## Developer setup
-
-### Tools
-
-| Tool | Needed for |
-|---|---|
-| Git and a GitHub account with access to `medica-health` | everything |
-| Docker Desktop (Compose v2) | running the full stack locally |
-| [Bun](https://bun.sh) 1.3+ | `client-side`, `express-api` |
-| JDK 21 | `spring-api` (Maven comes with the `mvnw` wrapper) |
-| Terraform ≥ 1.10, AWS CLI v2, kubectl, Helm | only for `infra`, `remote-backend`, `helm` |
-
-Optional: [GitHub CLI](https://cli.github.com) (`gh`) makes it easier to open PRs from the terminal.
-
-### Set up the workspace (first time)
-
-Clone every repo into **one** folder. The local Docker Compose file expects them side by side:
-
-```bash
-mkdir cdac-project && cd cdac-project
-
-for repo in .github client-side spring-api express-api helm infra remote-backend; do
-  git clone https://github.com/medica-health/$repo.git
-done
-```
-
-Check that your Git identity is set, so commits are credited to you:
-
-```bash
-git config --global user.name  "Your Name"
-git config --global user.email "you@example.com"
-```
-
-On Windows, keep line endings consistent with the Linux containers:
-
-```bash
-git config --global core.autocrlf input
-```
-
-Then follow [Quick start (local)](#quick-start-local) to run the stack.
+Errors use the same envelope with `"success": false`.
 
 ## Contributing
 
-Every change goes through a pull request. Nobody pushes directly to `main`.
+Every change goes through a pull request; nobody pushes directly to `main`.
 
 ### 1. Pick up the work
 
-- Find or create a GitHub **issue** in the repo you'll change, describing what you'll do.
-- Assign it to yourself so others know it's taken.
-- If one change touches several repos (e.g. a new endpoint in both APIs plus the front end), open one issue per repo and link them.
+Open or pick an issue in the repository you'll change and assign it to yourself, so others know it's taken.
 
-### 2. Get the latest `main`
+### 2. Pull the latest `main`
 
 ```bash
-cd spring-api            # the repo you're working in
+cd express-api              # the repository you're working in
 git checkout main
 git pull origin main
 ```
 
-### 3. Create a branch
+### 3. Create a new branch
 
-Branch from the updated `main`. Use a prefix and a short description, plus the issue number:
+Branch from the updated `main`. Use a prefix, the issue number and a short description:
 
 ```bash
 git checkout -b feature/12-user-login
@@ -229,120 +138,94 @@ git checkout -b feature/12-user-login
 ### 4. Make your changes
 
 - Keep a branch to one topic. Smaller PRs get reviewed faster.
-- **Keep the two APIs in step.** `spring-api` and `express-api` expose the same endpoints and return the same `{ success, message, data, timestamp }` envelope. If you add or change an endpoint in one, do the same in the other (or open an issue for it).
-- **Environment variables:** if you add or rename one, update `.env.example`, `.github/docker-compose.yml` and, for secrets, the Helm chart and Terraform (`infra/secrets.tf`) too.
-- **Never commit secrets:** no `.env` files, `*.tfvars`, `backend.hcl` or Terraform state. These are already in `.gitignore`; don't force-add them.
-- `client-side` uses Next.js 16, which has breaking changes from older versions. Check the docs bundled in `node_modules/next/dist/docs/` before relying on older patterns.
+- Keep the services in step: if you change a booking rule, a shared database column or a notification, check whether `express-api` and `receptionist` both need it.
+- Never commit `.env` files or other secrets.
 
-### 5. Check your work locally
+Run the checks for the repository you changed:
 
-Run the checks for the repo you changed before you push:
-
-| Repo | Commands |
+| Repository | Commands |
 |---|---|
 | `client-side` | `bun run lint` and `bun run build` |
 | `express-api` | `bun run lint` and `bun run typecheck` |
 | `spring-api` | `./mvnw test` |
-| `helm` | `helm lint cdac-apis` |
-| `infra` / `remote-backend` | `terraform fmt -check` and `terraform validate` |
 
-Then run the full stack with Docker Compose and try your change end to end.
+### 5. Commit
 
-The same checks run automatically in **GitHub Actions** (`.github/workflows/ci.yml` in each repo) on every pull request and every push to `main`. A PR can't be merged until they pass.
-
-### 6. Commit
-
-Write commit messages in the imperative mood, with a short summary line (about 50 characters) and an optional body explaining *why*:
+Write a short summary line in the imperative mood, and reference the issue:
 
 ```bash
+git status                  # see what changed
 git add <files>
-git commit -m "Add login endpoint to Spring API" -m "Refs #12"
+git commit -m "Add login endpoint" -m "Refs #12"
 ```
 
-Prefer several small, focused commits over one large one.
+### 6. Stay up to date with `main`
 
-### 7. Stay up to date with `main`
-
-If `main` has moved on while you were working, rebase your branch onto it and fix any conflicts:
+If `main` has moved on while you were working, rebase your branch onto it:
 
 ```bash
 git fetch origin
 git rebase origin/main
-# fix conflicts, then: git add <files> && git rebase --continue
+# fix any conflicts, then:
+git add <files>
+git rebase --continue
 ```
 
-### 8. Push your branch
+### 7. Push your branch
+
+The first push creates the branch on GitHub and links it to your local branch:
 
 ```bash
 git push -u origin feature/12-user-login
-# after a rebase on a branch you've already pushed:
+```
+
+After that, a plain `git push` is enough. If you rebased a branch you had already pushed:
+
+```bash
 git push --force-with-lease
 ```
 
 Only force-push your **own** feature branch, never `main`.
 
-### 9. Open a pull request
+### 8. Raise the pull request
 
-On GitHub, open a PR from your branch into `main`, or use the CLI:
+**On GitHub:** open the repository, click **Compare & pull request** on the banner for your branch, set the base to `main`, and click **Create pull request**.
+
+**Or from the terminal** with the [GitHub CLI](https://cli.github.com):
 
 ```bash
-gh pr create --base main --fill
+gh pr create --base main --fill          # add --draft if it isn't ready for review
 ```
 
-The description is pre-filled from the organization's [PR template](https://github.com/medica-health/.github/blob/main/PULL_REQUEST_TEMPLATE.md). Fill in each section, which covers:
+Fill in the [PR template](https://github.com/medica-health/.github/blob/main/PULL_REQUEST_TEMPLATE.md):
 
 - **What** changed and **why**
-- **How to test** it (commands, URLs, sample requests)
+- **How to test** it
 - `Closes #12` to link and auto-close the issue
 - Screenshots for UI changes
-- Links to related PRs in other repos, if the change spans several
+- Links to related PRs in other repositories, if the change spans several
 
-Open it as a **draft** if it isn't ready for review yet.
+### 9. Review and merge
 
-### 10. Review
-
-- Request at least **one reviewer** from the team.
-- Respond to every comment: push a fix or reply explaining your choice.
+- Request at least **one reviewer**. Answer every comment with a fix or a reply.
 - Push follow-up commits to the same branch; the PR updates automatically.
-- **Reviewers** check that the code works, follows the existing patterns, keeps the two APIs consistent, and doesn't include secrets.
+- Once it's approved and CI passes, use **Squash and merge** and delete the branch.
 
-### 11. Merge
-
-`main` is protected in every repo. A PR can only be merged when:
-
-- it has at least **one approval** (new commits dismiss earlier approvals),
-- all **CI checks pass**,
-- the branch is **up to date** with `main`, and
-- every review conversation is **resolved**.
-
-Direct pushes, force-pushes and deleting `main` are blocked.
-
-Once the PR is approved and up to date with `main`:
-
-- Use **Squash and merge**, so `main` gets one clean commit per PR.
-- Delete the branch after merging.
-- Clean up locally:
+Then clean up locally:
 
 ```bash
 git checkout main
 git pull origin main
-git branch -D feature/12-user-login   # -D because squash merges aren't seen as merged by Git
+git branch -D feature/12-user-login     # -D because squash merges aren't seen as merged by Git
 ```
-
-### Changes to infrastructure
-
-For `infra`, `remote-backend` and `helm`:
-
-- Paste the relevant `terraform plan` output (or the `helm template` / `helm diff` output) into the PR, with any secret values removed.
-- Only run `terraform apply` **after** the PR is approved and merged, from an up-to-date `main`.
-- Call out anything that destroys or replaces resources, or that changes costs.
 
 ## Tech stack
 
 | Layer | Technology |
 |---|---|
-| Front end | Next.js 16, React 19, TypeScript, Tailwind CSS v4, Bun |
-| Spring API | Spring Boot 4.2, Java 21, Spring Data JPA, Spring Data MongoDB, Actuator, Lombok, Maven |
-| Express API | Express 5, TypeScript, Bun, `pg`, Mongoose, Helmet, Morgan |
-| Data | PostgreSQL 16, MongoDB 7 (Amazon RDS and DocumentDB 5.0 on AWS) |
-| Infrastructure | Terraform, AWS (VPC, EKS, ECR, ALB, Secrets Manager), Helm, External Secrets Operator |
+| Web app | Next.js 16, React 19, TypeScript, Tailwind CSS v4, Bun |
+| Auth API | Spring Boot 4.2, Java 21, Spring Data JPA, Maven |
+| Domain API | Express 5, TypeScript, Bun, PostGIS, Mongoose, Redis |
+| Voice receptionist | Python 3.14, FastAPI, LangGraph, Claude, Twilio ConversationRelay |
+| Data | PostgreSQL 16 + PostGIS, MongoDB 7, Redis 7 |
+| Notifications | Resend (email), Twilio (SMS) |
